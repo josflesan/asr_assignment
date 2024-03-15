@@ -8,12 +8,13 @@ class MyViterbiDecoder:
     NLL_ZERO = 1e10  # define a constant representing -log(0).  This is really infinite, but approximate
                      # it here with a very large number
     
-    def __init__(self, f, audio_file_name, prune_threshold=None):
+    def __init__(self, f, audio_file_name, prune_threshold=None, keep_n_best=10000):
         """Set up the decoder class with an audio file and WFST f
         """
         self.om = observation_model.ObservationModel()
         self.f = f
         self.threshold = prune_threshold
+        self.keep_n_best = keep_n_best
         
         if audio_file_name:
             self.om.load_audio(audio_file_name)
@@ -41,7 +42,7 @@ class MyViterbiDecoder:
             self.B.append([-1]*self.f.num_states())
             self.W.append([[] for i in range(self.f.num_states())])  #  multiplying the empty list doesn't make multiple
 
-        self.active_states[0] = set(range(self.f.num_states()))
+        self.active_states[0] = set([(0, i) for i in range(self.f.num_states())])
         
         # The above code means that self.V[t][j] for t = 0, ... T gives the Viterbi cost
         # of state j, time t (in negative log-likelihood form)
@@ -110,7 +111,8 @@ class MyViterbiDecoder:
     
     def forward_step(self, t):
         if self.threshold:
-            for state in self.active_states[t-1]:
+            keep_n_best = max(self.keep_n_best, len(self.active_states[t-1]))
+            for state in sorted(self.active_states[t-1])[:keep_n_best]:
                 if not self.V[t-1][state] == self.NLL_ZERO:   # no point in propagating states with zero probability
                     for arc in self.f.arcs(state):
                         
