@@ -21,11 +21,12 @@ def parse_args():
     parser = argparse.ArgumentParser()
     parser.add_argument('--config')
     parser.add_argument('--self-arc-prob', type=float)
-    parser.add_argument('--final-prob', type=float)
+    parser.add_argument('--use-final-prob', type=float)
     parser.add_argument('--use-unigram', type=bool)
     parser.add_argument('--use-silence-state', type=bool)
     parser.add_argument('--silence-state-num', type=int)
     parser.add_argument('--pruning-threshold', type=float)
+    parser.add_argument('--pruning-beam', type=int)
     parser.add_argument('--pruning-strategy', choices=["normal"], type=str)
 
     if len(sys.argv) == 1:
@@ -54,51 +55,51 @@ if __name__ == '__main__':
     args = parse_args()
 
     unigram_probs = compute_unigram_probs() if args.use_unigram else None
+    final_probs = compute_final_probs() if args.use_final_prob else None
 
     # Create the lexicon
-    string = "peter piper picked a peck of pickled peppers"
+    string = "peter piper picked a peck of pickled peppers where's the peck of pickled peppers peter piper picked"
     lex = parse_lexicon('lexicon.txt')
     word_table, phone_table, state_table = generate_symbol_tables(lex)
 
     # Create L FST
     L = generate_L_wfst(lex)
     L.arcsort()
-    display_fst(L, "l.png")
+    # display_fst(L, "l.png")
 
     print("Generated L")
 
     # Create G FST
     G = generate_G_wfst(string, unigram_probs)
     G.arcsort()
-    display_fst(G, "g.png")
+    # display_fst(G, "g.png")
 
     print("Generated G")
 
     # Create H FST
     H = generate_H_wfst(args.self_arc_prob)
     H.arcsort()
-    display_fst(H, "h.png")
+    # display_fst(H, "h.png")
 
     print("Generated H")
-    
-    new_f = fst.compose(H, fst.compose(L, G))
-    display_fst(new_f)
-    # Compose FSTs
-    LG = fst.determinize(fst.compose(L, G).rmepsilon())
-    LG.arcsort()
-    print("Generated LG")
-    LG = LG.minimize()
-    print("Minimized LG")
-    compose = fst.compose(H, LG).rmepsilon()
-    print("Composed LG and H")
-    f = fst.determinize(compose)
-    print("Determinized Composition")
-    f.arcsort()
-    print("Determinized")
+
+    # f = fst.compose(H, L)
+
+    # LG = fst.determinize(fst.compose(L, G).rmepsilon())
+    # LG.arcsort()
+    # print("Generated LG")
+    # LG = LG.minimize()
+    # print("Minimized LG")
+    # f = fst.compose(H, LG).rmepsilon()
+    # print("Composed LG and H")
+    # f = fst.determinize(compose)
+    # print("Determinized Composition")
+    # f.arcsort()i
+    # print("Determinized")
     # f = f.minimize()
     # print("Minimized")
 
-    print("Generated Composition")
+    f = generate_sequence_wfst(string, self_loop_prob=args.self_arc_prob, unigram_probs=unigram_probs, use_sil=args.use_silence_state, final_probs=final_probs)
 
     # Train and Report Metrics
     wav_files = 0
@@ -108,7 +109,7 @@ if __name__ == '__main__':
     for wav_file in glob.glob('/group/teaching/asr/labs/recordings/*.wav'):
         wav_files += 1
 
-        decoder = MyViterbiDecoder(f, wav_file, args.pruning_threshold)
+        decoder = MyViterbiDecoder(f, wav_file, args.pruning_threshold, args.pruning_beam)
         
         decode_time = timeit.timeit(lambda: decoder.decode(), number=1)
         backtrace_time = timeit.timeit(lambda: decoder.backtrace(), number=1)

@@ -5,8 +5,21 @@ from IPython.display import Image
 
 def display_fst(f, filename="tmp.png"):
     f.draw('tmp.dot', portrait=True)
-    check_call(['dot','-Tpng','-Gdpi=200','tmp.dot','-o', filename])
+    check_call(['dot','-Tpng','-Gdpi=1600','tmp.dot','-o', filename])
     return Image(filename=filename)
+
+def compute_final_probs():
+    words = "peter piper picked a peck of pickled peppers where's the peck of pickled peppers peter piper picked"
+    total_utterances = 0
+    final_counts = {w: 0 for w in words.split(' ')}
+    for wav_file in glob.glob('/group/teaching/asr/labs/recordings/*.wav'):
+        transcription = read_transcription(wav_file).split(' ')
+        
+        final_counts[transcription[-1]] += 1
+        total_utterances += 1
+
+    final_probs = {w: (float(final_counts[w]) / total_utterances) for w in words.split(' ')}
+    return final_probs
 
 def compute_unigram_probs():
     words = "peter piper picked a peck of pickled peppers where's the peck of pickled peppers peter piper picked"
