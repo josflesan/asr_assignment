@@ -6,15 +6,20 @@ lex = parse_lexicon('lexicon.txt')
 word_table, phone_table, state_table = generate_symbol_tables(lex)
 
 # MANUALLY BUILDS THE WFST -- gets same WER as others
-def generate_sequence_wfst(word_seq, n=3, self_loop_prob=0.1, unigram_probs=None, final_probs=None, use_sil=False):
+def generate_sequence_wfst(word_seq, n=3, self_loop_prob=0.1, unigram_probs=None, final_probs=None, use_sil=False, bigram_probs=None):
     f = fst.Fst('log')
     start_state = f.add_state()
     f.set_start(start_state)
+
+    # Start and end of word states
+    start_of_word_states = []
+    end_of_word_states = []
 
     words = set(word_seq.split())
     num_words = len(words)
     for word in words:
         current_state = f.add_state()
+        start_of_word_states.append((current_state, word))
 
         word_prob = -math.log(1 / num_words)
         if unigram_probs:
@@ -39,16 +44,34 @@ def generate_sequence_wfst(word_seq, n=3, self_loop_prob=0.1, unigram_probs=None
 
             final_weight = 10.0 if final_probs[word] == 0 else -math.log(final_probs[word])
             f.add_arc(current_state, fst.Arc(0, 0, fst.Weight("log", final_weight), final_state))
-            f.add_arc(current_state, fst.Arc(0, 0, fst.Weight("log", 0.0), start_state))
+
+            if not bigram_probs:
+                f.add_arc(current_state, fst.Arc(0, 0, fst.Weight("log", 0.0), start_state))
+
             f.set_final(final_state)
+
+            end_of_word_states.append((current_state, word))
+
         else:
-            f.add_arc(current_state, fst.Arc(0, 0, fst.Weight("log", 0.0), start_state))
+            if not bigram_probs:
+                f.add_arc(current_state, fst.Arc(0, 0, fst.Weight("log", 0.0), start_state))
             f.set_final(current_state)
+
+            end_of_word_states.append((current_state, word))
 
     if use_sil:
         silence_final_state = generate_silence_wfst(f, start_state, 5, self_loop_prob)
         f.add_arc(silence_final_state, fst.Arc(0, 0, fst.Weight("log", 0.0), start_state))
         f.set_final(silence_final_state)
+
+
+    if bigram_probs:
+        for start_state, start_word in start_of_word_states:
+            for end_state, end_word in end_of_word_states:
+                if f"{end_word}_{start_word}" in bigram_probs:
+                    f.add_arc(end_state, fst.Arc(0, 0, fst.Weight("log", 0.0), start_state))
+                else:
+                    f.add_arc(end_state, fst.Arc(0, 0, fst.Weight("log", 1.0), start_state))
 
     f.set_input_symbols(state_table)
     f.set_output_symbols(word_table)

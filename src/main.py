@@ -23,6 +23,7 @@ def parse_args():
     parser.add_argument('--self-arc-prob', type=float)
     parser.add_argument('--use-final-prob', type=float)
     parser.add_argument('--use-unigram', type=bool)
+    parser.add_argument('--use-bigram', type=bool)
     parser.add_argument('--use-silence-state', type=bool)
     parser.add_argument('--silence-state-num', type=int)
     parser.add_argument('--pruning-threshold', type=float)
@@ -55,7 +56,10 @@ if __name__ == '__main__':
     args = parse_args()
 
     unigram_probs = compute_unigram_probs() if args.use_unigram else None
+    bigram_probs = compute_bigram_probs() if args.use_bigram else None
     final_probs = compute_final_probs() if args.use_final_prob else None
+
+    print(unigram_probs)
 
     # Create the lexicon
     string = "peter piper picked a peck of pickled peppers where's the peck of pickled peppers peter piper picked"
@@ -98,14 +102,17 @@ if __name__ == '__main__':
     # print("Determinized")
     # f = f.minimize()
     # print("Minimized")
-
-    f = generate_sequence_wfst(string, self_loop_prob=args.self_arc_prob, unigram_probs=unigram_probs, use_sil=args.use_silence_state, final_probs=final_probs)
+    f = generate_sequence_wfst(string, self_loop_prob=args.self_arc_prob, unigram_probs=unigram_probs, use_sil=args.use_silence_state, final_probs=final_probs, bigram_probs=bigram_probs)
+    display_fst(f, "f.png")
 
     # Train and Report Metrics
     wav_files = 0
     total_errors, total_words = 0, 0
     decode_times = []
     backtrace_times = []
+    insertion_errors = 0
+    deletion_errors = 0
+    sub_errors = 0
     for wav_file in glob.glob('/group/teaching/asr/labs/recordings/*.wav'):
         wav_files += 1
 
@@ -124,6 +131,10 @@ if __name__ == '__main__':
         total_errors += sum(error_counts)
         total_words += word_count
 
+        sub_errors += error_counts[0]
+        deletion_errors += error_counts[1]
+        insertion_errors += error_counts[2]
+
         print(wav_files, error_counts, word_count)
 
     print(f"Total WER: {total_errors / total_words}")
@@ -131,4 +142,7 @@ if __name__ == '__main__':
     print(f"Average backtrace() Time: {sum(backtrace_times) / wav_files}")
     print(f"FST Number of States: {f.num_states()}")
     print(f"FST Number of Arcs: {get_num_arcs(f)}")
+    print(f"Number of Insertion Errors: {insertion_errors}")
+    print(f"Number of Deletion Errors: {deletion_errors}")
+    print(f"Number of Substitution Errors: {sub_errors}")
     # print(f"FST Size: {f.size()} byte bytes")  #TODO: determine whether this works
