@@ -77,6 +77,72 @@ def generate_sequence_wfst(word_seq, n=3, self_loop_prob=0.1, unigram_probs=None
     f.set_output_symbols(word_table)
     return f
 
+def generate_tree_wfst(word_seq, n=3, self_loop_prob=0.1):
+    words = set(word_seq.split())
+    nodes, edges, sizes = [(None, None)], [dict()], [0]
+
+    for word in words:
+        current_node = 0
+        phones = lex[word]
+        for phone in phones:
+            if phone not in edges[current_node]:
+                # print(current_node, phone, edges[current_node].items())
+                edges[current_node][phone] = len(nodes)
+                nodes.append((phone, 0)) # input phone, output word
+                edges.append(dict())
+                sizes.append(0)
+            current_node = edges[current_node][phone]
+        
+        nodes[-1] = (nodes[-1][0], word_table.find(word)) # output word at the last phone
+    
+    f = fst.Fst('log')
+    start_state = f.add_state()
+    f.set_start(start_state)
+    f.set_final(start_state)
+
+    def fill_sizes(node):
+        if len(edges[node]) == 0:
+            sizes[node] = 1
+        else:
+            for next_node in edges[node].values():
+                fill_sizes(next_node)
+                sizes[node] += sizes[next_node]
+    
+    def generate_tree(node, current_state):
+        phone = nodes[node][0]        
+        for i in range(1, n+1):
+            in_label = state_table.find(f"{phone}_{i}")
+            f.add_arc(current_state, fst.Arc(in_label, 0, fst.Weight("log", -math.log(self_loop_prob)), current_state))
+
+            if i != n:
+                next_state = f.add_state()
+                f.add_arc(current_state, fst.Arc(in_label, 0, fst.Weight("log", -math.log(1-self_loop_prob)), next_state))
+                current_state = next_state
+
+        final_prob = -math.log(1-self_loop_prob)
+        if len(edges[node]) == 0:
+            f.add_arc(current_state, fst.Arc(in_label, nodes[node][1], fst.Weight("log", final_prob), start_state))
+            
+        for next_node in edges[node].values():
+            transition_prob = -math.log(sizes[next_node]/sizes[node]) + final_prob
+            
+            next_state = f.add_state()
+            f.add_arc(current_state, fst.Arc(in_label, 0, fst.Weight("log", transition_prob), next_state))
+            generate_tree(next_node, next_state)
+    
+    fill_sizes(0)
+    for next_node in edges[0].values():
+        transition_prob = -math.log(sizes[next_node]/sizes[0])
+        
+        next_state = f.add_state()
+        f.add_arc(start_state, fst.Arc(0, 0, fst.Weight("log", transition_prob), next_state))
+        generate_tree(next_node, next_state)
+    
+    f.set_input_symbols(state_table)
+    f.set_output_symbols(word_table)
+
+    return f
+
 def generate_silence_wfst(f, start_state, n, self_loop_prob=0.1):
     current_state = start_state
     states = [start_state]
