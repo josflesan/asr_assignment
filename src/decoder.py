@@ -2,6 +2,7 @@ import openfst_python as fst
 import math
 import observation_model
 from helper_functions import parse_lexicon, generate_symbol_tables
+import queue
 
 class MyViterbiDecoder:
     
@@ -33,6 +34,10 @@ class MyViterbiDecoder:
         self.B = []   # stores identity of best previous state reaching state j
         self.W = []   # stores output labels sequence along arc reaching j - this removes need for 
                       # extra code to read the output sequence along the best path
+
+        self.visited_states = [set() for _ in range(self.om.observation_length() + 1)]
+        self.finalWeights = set()
+        self.Q = queue.PriorityQueue()  # queue used for dijkstra's decoding
         
         self.active_states = []
         
@@ -41,6 +46,8 @@ class MyViterbiDecoder:
             self.V.append([self.NLL_ZERO]*self.f.num_states())
             self.B.append([-1]*self.f.num_states())
             self.W.append([[] for i in range(self.f.num_states())])  #  multiplying the empty list doesn't make multiple
+
+        self.Q.put((0.0, (self.f.start(), 0)))  # (weight, (state, time_step))
 
         self.active_states[0] = [(0, i) for i in range(self.f.num_states())]
         
@@ -55,7 +62,7 @@ class MyViterbiDecoder:
         # examples of these in earlier labs) these correspond to non-emitting states, 
         # which means that we need to process them without stepping forward in time.  
         # Don't worry too much about this!  
-        self.traverse_epsilon_arcs(0)        
+        # self.traverse_epsilon_arcs(0)        
         
     def traverse_epsilon_arcs(self, t):
         """Traverse arcs with <eps> on the input at time t
@@ -108,7 +115,81 @@ class MyViterbiDecoder:
                         if j not in states_to_traverse:
                             states_to_traverse.append(j)
 
-    
+
+    def forward_dijkstra(self):
+        states_visited = 0
+        while not self.Q.empty():
+            weight, (state, time_step) = self.Q.get()
+
+            if state in self.visited_states[time_step]:
+                continue
+
+            if float(self.f.final(state)) != math.inf and time_step == self.om.observation_length():
+                self.finalWeights.add(weight)
+                print(f"States Visited: ", states_visited / (len(self.V) * len(self.V[0])))
+                return 
+
+            if len(self.finalWeights) > 0 and min(self.finalWeights) - weight < -math.log(0.15):
+                return
+
+            if self.V[time_step][state] >= self.NLL_ZERO:
+                continue
+
+            states_visited += 1
+
+            self.visited_states[time_step].add(state)
+
+            # For each potential transition...
+            for arc in self.f.arcs(state):
+                if arc.ilabel != 0:
+
+                    if time_step == self.om.observation_length():
+                        continue
+
+                    j = arc.nextstate
+                    tp = float(arc.weight)
+                    ep = -self.om.log_observation_probability(self.f.input_symbols().find(arc.ilabel), time_step + 1)  # emission negative log prob
+                    prob = tp + ep # they're logs
+
+                    new_weight = weight + prob
+                    
+                    if new_weight < self.V[time_step + 1][j]:
+                        self.V[time_step + 1][j] = new_weight
+                        self.B[time_step + 1][j] = state
+
+                        # store the output labels encountered too
+                        if arc.olabel != 0:
+                            self.W[time_step + 1][j] = [arc.olabel]
+                        else:
+                            self.W[time_step + 1][j] = []
+
+                        self.Q.put((new_weight, (j, time_step + 1)))
+
+                else:
+                    j = arc.nextstate   # ID of next state  
+                
+                    if self.V[time_step][j] > self.V[time_step][state] + float(arc.weight):
+                        
+                        # this means we've found a lower-cost path to
+                        # state j at time t.  We might need to add it
+                        # back to the processing queue.
+                        self.V[time_step][j] = self.V[time_step][state] + float(arc.weight)
+                        
+                        # save backtrace information.  In the case of an epsilon transition, 
+                        # we save the identity of the best state at t-1.  This means we may not
+                        # be able to fully recover the best path, but to do otherwise would
+                        # require a more complicated way of storing backtrace information
+                        self.B[time_step][j] = self.B[time_step][state] 
+                        
+                        # and save the output labels encountered - this is a list, because
+                        # there could be multiple output labels (in the case of <eps> arcs)
+                        if arc.olabel != 0:
+                            self.W[time_step][j] = self.W[time_step][state] + [arc.olabel]
+                        else:
+                            self.W[time_step][j] = self.W[time_step][state]
+
+                        self.Q.put((self.V[time_step][state] + float(arc.weight), (j, time_step)))
+
     def forward_step(self, t):
         if self.threshold:
             keep_n_best = min(self.keep_n_best, len(self.active_states[t-1]))
@@ -180,13 +261,20 @@ class MyViterbiDecoder:
             print("No path got to the end of the observations.")
         
         
-    def decode(self):
+    def decode(self, dijkstra=False):
         self.initialise_decoding()
         t = 1
-        while t <= self.om.observation_length():
-            self.forward_step(t)
-            self.traverse_epsilon_arcs(t)
-            t += 1
+
+        if dijkstra:
+            self.forward_dijkstra()
+
+        else:
+            self.traverse_epsilon_arcs(0)
+            while t <= self.om.observation_length():
+                self.forward_step(t)
+                self.traverse_epsilon_arcs(t)
+                t += 1
+                
         self.finalise_decoding()
     
     def backtrace(self):

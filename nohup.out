@@ -1,0 +1,19 @@
+Wav File: 1/164 | Errors: (1, 0, 11) | Transcription Length: 17
+Wav File: 2/164 | Errors: (1, 0, 9) | Transcription Length: 7
+Traceback (most recent call last):
+  File "src/grid_search.py", line 144, in <module>
+    train(training_set, dev_set, self_loop, use_final, unigram, use_silence)
+  File "src/grid_search.py", line 86, in train
+    decode_time = timeit.timeit(lambda: decoder.decode(), number=1)
+  File "/afs/inf.ed.ac.uk/user/s20/s2088605/.conda/envs/asr_env/lib/python3.7/timeit.py", line 233, in timeit
+    return Timer(stmt, setup, timer, globals).timeit(number)
+  File "/afs/inf.ed.ac.uk/user/s20/s2088605/.conda/envs/asr_env/lib/python3.7/timeit.py", line 177, in timeit
+    timing = self.inner(it, self.timer)
+  File "<timeit-src>", line 6, in inner
+  File "src/grid_search.py", line 86, in <lambda>
+    decode_time = timeit.timeit(lambda: decoder.decode(), number=1)
+  File "/afs/inf.ed.ac.uk/user/s20/s2088605/Documents/Y4/asr_assignment/src/decoder.py", line 188, in decode
+    self.traverse_epsilon_arcs(t)
+  File "/afs/inf.ed.ac.uk/user/s20/s2088605/Documents/Y4/asr_assignment/src/decoder.py", line 82, in traverse_epsilon_arcs
+    for arc in self.f.arcs(i):
+KeyboardInterrupt

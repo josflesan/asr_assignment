@@ -1,0 +1,2 @@
+Best Performing WER: 0.9|True|False|False|linear-3
+Best Performing PP: 0.9|True|False|True|None

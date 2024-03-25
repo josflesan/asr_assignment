@@ -61,7 +61,7 @@ def generate_sequence_wfst(word_seq, n=3, self_loop_prob=0.1, unigram_probs=None
 
     if use_sil and use_sil.split('-')[0] == 'linear':
         num_states = int(use_sil.split('-')[1])
-
+        
         silence_final_state = generate_linear_silence_wfst(f, start_state, num_states, self_loop_prob)
         f.add_arc(silence_final_state, fst.Arc(0, 0, fst.Weight("log", 0.0), start_state))
         f.set_final(silence_final_state)
@@ -72,12 +72,12 @@ def generate_sequence_wfst(word_seq, n=3, self_loop_prob=0.1, unigram_probs=None
         f.set_final(silence_final_state)
 
     if bigram_probs:
-        for start_state, start_word in start_of_word_states:
+        for initial_state, start_word in start_of_word_states:
             for end_state, end_word in end_of_word_states:
                 if bigram_probs[f"{end_word}_{start_word}"] > 0:
-                    f.add_arc(end_state, fst.Arc(0, 0, fst.Weight("log", -math.log(bigram_probs[f"{end_word}_{start_word}"])), start_state))
+                    f.add_arc(end_state, fst.Arc(0, 0, fst.Weight("log", -math.log(bigram_probs[f"{end_word}_{start_word}"])), initial_state))
                 else:
-                    f.add_arc(end_state, fst.Arc(0, 0, fst.Weight("log", 1e10), start_state))
+                    f.add_arc(end_state, fst.Arc(0, 0, fst.Weight("log", 1e10), initial_state))
 
     f.set_input_symbols(state_table)
     f.set_output_symbols(word_table)
