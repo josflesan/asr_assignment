@@ -6,7 +6,7 @@ lex = parse_lexicon('lexicon.txt')
 word_table, phone_table, state_table = generate_symbol_tables(lex)
 
 # MANUALLY BUILDS THE WFST -- gets same WER as others
-def generate_sequence_wfst(word_seq, n=3, self_loop_prob=0.1, unigram_probs=None, final_probs=None, use_sil=False, bigram_probs=None):
+def generate_sequence_wfst(word_seq, n=3, self_loop_prob=0.1, unigram_probs=None, final_probs=None, use_sil=None, bigram_probs=None):
     f = fst.Fst('log')
     start_state = f.add_state()
     f.set_start(start_state)
@@ -59,19 +59,25 @@ def generate_sequence_wfst(word_seq, n=3, self_loop_prob=0.1, unigram_probs=None
 
             end_of_word_states.append((current_state, word))
 
-    if use_sil:
+    if use_sil and use_sil.split('-')[0] == 'linear':
+        num_states = int(use_sil.split('-')[1])
+
+        silence_final_state = generate_linear_silence_wfst(f, start_state, num_states, self_loop_prob)
+        f.add_arc(silence_final_state, fst.Arc(0, 0, fst.Weight("log", 0.0), start_state))
+        f.set_final(silence_final_state)
+
+    elif use_sil:
         silence_final_state = generate_silence_wfst(f, start_state, 5, self_loop_prob)
         f.add_arc(silence_final_state, fst.Arc(0, 0, fst.Weight("log", 0.0), start_state))
         f.set_final(silence_final_state)
 
-
     if bigram_probs:
         for start_state, start_word in start_of_word_states:
             for end_state, end_word in end_of_word_states:
-                if f"{end_word}_{start_word}" in bigram_probs:
-                    f.add_arc(end_state, fst.Arc(0, 0, fst.Weight("log", 0.0), start_state))
+                if bigram_probs[f"{end_word}_{start_word}"] > 0:
+                    f.add_arc(end_state, fst.Arc(0, 0, fst.Weight("log", -math.log(bigram_probs[f"{end_word}_{start_word}"])), start_state))
                 else:
-                    f.add_arc(end_state, fst.Arc(0, 0, fst.Weight("log", 1.0), start_state))
+                    f.add_arc(end_state, fst.Arc(0, 0, fst.Weight("log", 1e10), start_state))
 
     f.set_input_symbols(state_table)
     f.set_output_symbols(word_table)
@@ -142,6 +148,21 @@ def generate_tree_wfst(word_seq, n=3, self_loop_prob=0.1):
     f.set_output_symbols(word_table)
 
     return f
+
+def generate_linear_silence_wfst(f, start_state, n, self_loop_prob=0.1):
+    current_state = start_state
+    for i in range(1, n+1):
+        in_label = state_table.find('sil_{}'.format(i))
+        sl_weight = fst.Weight('log', -math.log(self_loop_prob))
+        f.add_arc(current_state, fst.Arc(in_label, 0, sl_weight, current_state))
+
+        next_state = f.add_state()
+        next_weight = fst.Weight('log', -math.log(1 - self_loop_prob))
+        f.add_arc(current_state, fst.Arc(in_label, 0, next_weight, next_state))
+
+        current_state = next_state
+
+    return current_state
 
 def generate_silence_wfst(f, start_state, n, self_loop_prob=0.1):
     current_state = start_state
