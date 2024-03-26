@@ -259,6 +259,9 @@ class MyViterbiDecoder:
         finished = [x for x in self.V[-1] if x < self.NLL_ZERO]
         if not finished:  # if empty
             print("No path got to the end of the observations.")
+            return False
+
+        return True
         
         
     def decode(self, dijkstra=False):

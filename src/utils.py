@@ -33,26 +33,54 @@ def plot_word_dist():
 
         total_utterances += 1
 
-    fig = plt.figure(figsize=(8, 4))
-    ax = fig.add_subplot(111)
+    fig = plt.figure(figsize=(10, 5))
 
     plt.boxplot(transcription_lengths, vert=0)
-    plt.title("Transcription Length Distribution (329 utts.)")
-    plt.tick_params(axis='y', which='both', left=False, right=False)
-    plt.xlabel("Sentence Length")
-    plt.savefig('boxplot.png', dpi=300)
+    plt.tick_params(axis='y', which='both', labelsize=25, left=False, right=False)
+    plt.yticks([])
+    plt.xlabel("Sentence Length", fontsize=20)
+    plt.tight_layout()
+    plt.savefig('boxplot.png', dpi=500)
 
     # Plot word distribution
-    fig = plt.figure(figsize=(8, 4))
+    fig = plt.figure(figsize=(18, 9))
     plt.bar(word_frequencies.keys(), word_frequencies.values(), color='skyblue')
-    plt.ylabel('Frequency Count')
-    plt.title('Word Distribution')
-    plt.xticks(rotation=45, ha='right')
-    plt.savefig('barplot.png', dpi=300)
+    plt.tick_params(axis='y', labelsize=25)
+    plt.ylabel('Frequency Count', fontsize=30)
+    plt.xticks(rotation=45, ha='right', fontsize=19)
+    plt.savefig('barplot.png', dpi=500)
 
     print(f"Distinct Transcriptions (%): {len(transcription_set) / total_utterances}")
 
 
+def compute_trigram_probs(dataset):
+    trigram_counts = dict()
+    bigram_counts = dict()
+    unigram_counts = dict()
+
+    words = "peter piper picked a peck of pickled peppers where's the peck of pickled peppers peter piper picked"
+    words = list(set(words.split()))
+    for word1 in words:# + ["None"]:
+        for word2 in words:
+            for word3 in words:
+                trigram_counts[f"{word1}_{word2}_{word3}"] = 0
+
+    for wav_file in dataset:
+        transcription = read_transcription(wav_file).split(' ')
+
+        for word1, word2, word3 in zip(transcription[:-2], transcription[1:-1], transcription[2:]):
+            trigram_counts[f"{word1}_{word2}_{word3}"] += 1
+
+        for word1, word2 in zip(transcription[:-1], transcription[1:]):
+            bigram_counts[f"{word1}_{word2}"] = bigram_counts.get(f"{word1}_{word2}", 0) + 1
+        
+        for word in transcription:
+            unigram_counts[word] = unigram_counts.get(word, 0) + 1
+
+    for trigram in trigram_counts.keys():
+        if trigram_counts[trigram] > 0:
+            trigram_counts[trigram] /= bigram_counts[trigram[:trigram.rfind("_")]]
+    return trigram_counts
 
 def compute_final_probs(dataset):
     words = "peter piper picked a peck of pickled peppers where's the peck of pickled peppers peter piper picked"
@@ -129,3 +157,21 @@ def read_transcription(wav_file):
         transcription = f.readline().strip()
 
     return transcription
+
+def get_logs():
+    log_directory = './new_logs/*.txt'
+
+    best_model = None
+    best_wer = 1e10
+    for file in glob.glob(log_directory):
+        with open(file, "r") as f:
+            log_lines = f.readlines()
+            wer = float(log_lines[-9].split(':')[1].strip())
+
+            if wer < best_wer:
+                best_wer = wer
+                best_model = file.strip('./new_logs/')
+
+    print(f"Best WER: {best_wer} | Best Model: {best_model}")
+            
+

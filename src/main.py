@@ -33,6 +33,7 @@ def parse_args():
     parser.add_argument('--use-final-prob', type=str, choices=["linear-3", "linear-5", "ergodic-5"])
     parser.add_argument('--use-unigram', type=bool)
     parser.add_argument('--use-bigram', type=bool)
+    parser.add_argument('--use-trigram', type=bool)
     parser.add_argument('--use-silence-state', type=bool)
     parser.add_argument('--silence-state-num', type=int)
     parser.add_argument('--pruning-threshold', type=float)
@@ -68,18 +69,21 @@ if __name__ == '__main__':
 
     unigram_probs = compute_unigram_probs(dev_set) if args.use_unigram else None
     bigram_probs = compute_bigram_probs(dev_set) if args.use_bigram else None
+    trigram_probs = compute_trigram_probs(dev_set) if args.use_trigram else None
     final_probs = compute_final_probs(dev_set) if args.use_final_prob else None
 
     perplexity_bigrams = compute_bigram_probs(dev_set)
-
-    plot_word_dist()
 
     # Create the lexicon
     string = "peter piper picked a peck of pickled peppers where's the peck of pickled peppers peter piper picked"
     lex = parse_lexicon('lexicon.txt')
     word_table, phone_table, state_table = generate_symbol_tables(lex)
 
-    f = generate_sequence_wfst(string, self_loop_prob=args.self_arc_prob, unigram_probs=unigram_probs, use_sil=args.use_silence_state, final_probs=final_probs, bigram_probs=bigram_probs)
+    if args.use_trigram:
+        f = generate_sequence_trigram_wfst(string, self_loop_prob=args.self_arc_prob, unigram_probs=unigram_probs, use_sil=args.use_silence_state, final_probs=final_probs, trigram_probs=trigram_probs)
+    else:
+        f = generate_sequence_wfst(string, self_loop_prob=args.self_arc_prob, unigram_probs=unigram_probs, use_sil=args.use_silence_state, final_probs=final_probs, bigram_probs=bigram_probs)
+
     display_fst(f, "f.png")
 
     # Train and Report Metrics
@@ -96,7 +100,7 @@ if __name__ == '__main__':
 
         decoder = MyViterbiDecoder(f, wav_file, args.pruning_threshold, args.pruning_beam)
         
-        decode_time = timeit.timeit(lambda: decoder.decode(False), number=1)
+        decode_time = timeit.timeit(lambda: decoder.decode(), number=1)
         backtrace_time = timeit.timeit(lambda: decoder.backtrace(), number=1)
         decode_times.append(decode_time)
         backtrace_times.append(backtrace_time)

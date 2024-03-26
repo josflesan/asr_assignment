@@ -7,6 +7,7 @@ import glob
 import timeit
 import os
 import wer
+import numpy as np
 import observation_model
 import openfst_python as fst
 from helper_functions import parse_lexicon, generate_symbol_tables
@@ -60,15 +61,18 @@ def split_data(split=0.5):
 
     return all_data[:int(len(all_data) * split)], all_data[int(len(all_data) * split):]
 
-def train(training_set, dev_set, self_loop, use_final, use_unigram, use_bigram, use_silence, log_file=None):
+def train(training_set, dev_set, self_loop=0.9, use_final=False, use_unigram=True, use_bigram=True, use_silence='linear-5', threshold=1e10, beam_size=1e10, log_file=None):
     if log_file is None:
-        log_file = f"./new_logs/self_loop={self_loop}|use_final={use_final}|use_unigram={use_unigram}|use_bigram={use_bigram}|use_silence={use_silence}.txt"
+        log_file = f"./logs/threshold={threshold}|beam_size={beam_size}.txt"
 
         if os.path.exists(log_file):
             print(f"SKIPPED {log_file}")
             return 1e10, 1e10
 
+    print(f"RUNNING threshold={threshold} | beam size = {beam_size}")
+
     log_output = []
+    string = "peter piper picked a peck of pickled peppers where's the peck of pickled peppers peter piper picked"
 
     unigram_probs = compute_unigram_probs(dev_set) if use_unigram else None
     final_probs = compute_final_probs(dev_set) if use_final else None
@@ -86,10 +90,12 @@ def train(training_set, dev_set, self_loop, use_final, use_unigram, use_bigram, 
     deletion_errors = 0
     sub_errors = 0
     total_perplexity = 0
+
+    total_no_finish = 0
     for wav_file in training_set:
         wav_files += 1
 
-        decoder = MyViterbiDecoder(f, wav_file, None, None)
+        decoder = MyViterbiDecoder(f, wav_file, threshold, beam_size)
 
         decode_time = timeit.timeit(lambda: decoder.decode(), number=1)
         backtrace_time = timeit.timeit(lambda: decoder.backtrace(), number=1)
@@ -119,6 +125,7 @@ def train(training_set, dev_set, self_loop, use_final, use_unigram, use_bigram, 
 
     final_wer = f"Total WER: {total_errors / total_words}"
     final_pp = f"Avg Perplexity: {total_perplexity / len(training_set)}"
+    no_finish = f"Num No Finish: {total_no_finish}"
     average_decode = f"Average decode() Time: {sum(decode_times) / wav_files}"
     average_backtrace = f"Average backtrace() Time: {sum(backtrace_times) / wav_files}"
     fst_num_states = f"FST Number of States: {f.num_states()}"
@@ -127,7 +134,7 @@ def train(training_set, dev_set, self_loop, use_final, use_unigram, use_bigram, 
     total_del_errors = f"Number of Deletion Errors: {deletion_errors}"
     total_sub_errors = f"Number of Substitution Errors: {sub_errors}"
 
-    for log in [final_wer, final_pp, average_decode, average_backtrace, fst_num_states, fst_num_arcs, total_ins_errors, total_del_errors, total_sub_errors]:
+    for log in [final_wer, final_pp, no_finish, average_decode, average_backtrace, fst_num_states, fst_num_arcs, total_ins_errors, total_del_errors, total_sub_errors]:
         log_output.append(log + "\n")
 
     with open(log_file, "w") as f:
@@ -139,11 +146,8 @@ def train(training_set, dev_set, self_loop, use_final, use_unigram, use_bigram, 
 
 if __name__ == '__main__':
     # Grid search parameters
-    self_loop_probs = [0.1, 0.3, 0.5, 0.7, 0.9]
-    use_final_probs = [False, True]
-    use_unigram = [False, True]
-    use_bigram = [False, True]
-    use_silence_hmm = [None, 'linear-3', 'linear-5', 'ergodic-5']
+    thresholds = list(range(100, 201, 20))[::-1]
+    beam_sizes = [i for i in range(120, 241, 24)][::-1]
 
     best_wer = 1e10
     best_pp = 1e10
@@ -153,23 +157,19 @@ if __name__ == '__main__':
     training_set, dev_set = split_data()
 
     # Create the lexicon
-    string = "peter piper picked a peck of pickled peppers where's the peck of pickled peppers peter piper picked"
     lex = parse_lexicon('lexicon.txt')
     word_table, phone_table, state_table = generate_symbol_tables(lex)
-    
-    for self_loop in self_loop_probs:
-        for use_final in use_final_probs:
-            for bigram in use_bigram:
-                for unigram in use_unigram:
-                    for use_silence in use_silence_hmm:
-                        out_wer, out_perp = train(training_set, dev_set, self_loop, use_final, unigram, bigram, use_silence)
 
-                        if out_wer < best_wer:
-                            best_performing_wer = f"{self_loop}|{use_final}|{bigram}|{unigram}|{use_silence}"
-                            best_wer = out_wer
-                        if out_perp < best_pp:
-                            best_performing_pp = f"{self_loop}|{use_final}|{bigram}|{unigram}|{use_silence}"
-                            best_pp = out_perp
+    for threshold in thresholds:
+        for beam_size in beam_sizes:
+            out_wer, out_perp = train(training_set, dev_set, threshold=threshold, beam_size=beam_size)
+
+            if out_wer < best_wer:
+                best_performing_wer = f"{threshold}|{beam_size}"
+                best_wer = out_wer
+            if out_perp < best_pp:
+                best_performing_wer = f"{threshold}|{beam_size}"
+                best_pp = out_perp
 
     # Write best performing
     with open("./logs/best_performing.txt", "w") as f:
