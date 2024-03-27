@@ -58,8 +58,7 @@ def plot_efficiency_heatmap():
     plt.xticks(np.arange(len(beam_sizes)), beam_sizes, fontsize=14)
     plt.yticks(np.arange(len(thresholds)), thresholds, fontsize=14)
 
-    plt.show()
-    # plt.savefig('heatmap_tree.png', dpi=500)
+    plt.savefig('heatmap_tree.png', dpi=500)
 
 
 def plot_tradeoff():

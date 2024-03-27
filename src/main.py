@@ -35,6 +35,7 @@ def parse_args():
     parser.add_argument('--use-bigram', type=bool)
     parser.add_argument('--use-trigram', type=bool)
     parser.add_argument('--use-tree', type=bool)
+    parser.add_argument('--use-pronunciations', type=bool)
     parser.add_argument('--use-silence-state', type=bool)
     parser.add_argument('--silence-state-num', type=int)
     parser.add_argument('--pruning-threshold', type=float)
@@ -79,17 +80,19 @@ if __name__ == '__main__':
 
     # Create the lexicon
     string = "peter piper picked a peck of pickled peppers where's the peck of pickled peppers peter piper picked"
-    lex = parse_lexicon('lexicon.txt')
+    lex = parse_lexicon('lexicon.txt', args.use_pronunciations)
     word_table, phone_table, state_table = generate_symbol_tables(lex)
 
     if args.use_trigram:
         f = generate_sequence_trigram_wfst(string, self_loop_prob=args.self_arc_prob, unigram_probs=unigram_probs, use_sil=args.use_silence_state, final_probs=final_probs, trigram_probs=trigram_probs)
-    if args.use_tree:
+    elif args.use_tree:
         f = generate_tree_wfst(string, self_loop_prob=args.self_arc_prob)
     else:
-        f = generate_sequence_wfst(string, self_loop_prob=args.self_arc_prob, unigram_probs=unigram_probs, use_sil=args.use_silence_state, final_probs=final_probs, bigram_probs=bigram_probs)
 
-    display_fst(f, "f.png")
+        if args.use_pronunciations:
+            f = generate_sequence_alt_pronunciations_wfst(string, self_loop_prob=args.self_arcProb, unigram_probs=unigram_probs, final_probs=final_probs, use_sil=args.use_silence_state, use_pronounciations=args.use_pronunciations)
+        else:
+            f = generate_sequence_wfst(string, self_loop_prob=args.self_arc_prob, unigram_probs=unigram_probs, use_sil=args.use_silence_state, final_probs=final_probs, bigram_probs=bigram_probs)    
 
     # Train and Report Metrics
     wav_files = 0

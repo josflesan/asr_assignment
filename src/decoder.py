@@ -56,13 +56,7 @@ class MyViterbiDecoder:
         # Initialising the costs to NLL_ZERO effectively means zero probability    
         
         # give the WFST start state a probability of 1.0   (NLL = 0.0)
-        self.V[0][self.f.start()] = 0.0
-        
-        # some WFSTs might have arcs with epsilon on the input (you might have already created 
-        # examples of these in earlier labs) these correspond to non-emitting states, 
-        # which means that we need to process them without stepping forward in time.  
-        # Don't worry too much about this!  
-        # self.traverse_epsilon_arcs(0)        
+        self.V[0][self.f.start()] = 0.0       
         
     def traverse_epsilon_arcs(self, t):
         """Traverse arcs with <eps> on the input at time t
@@ -128,8 +122,6 @@ class MyViterbiDecoder:
                 self.finalWeights.add(weight)
                 states_visited_dijk[0] += states_visited
                 states_visited_dijk[1] += len(self.V) * len(self.V[0])
-
-                # print(f"States Visited: ", states_visited / (len(self.V) * len(self.V[0])))
                 return 
 
             if len(self.finalWeights) > 0 and min(self.finalWeights) - weight < -math.log(0.15):
@@ -268,6 +260,10 @@ class MyViterbiDecoder:
         
         
     def decode(self, dijkstra=False, states_visited_dijk=[]):
+        # some WFSTs might have arcs with epsilon on the input (you might have already created 
+        # examples of these in earlier labs) these correspond to non-emitting states, 
+        # which means that we need to process them without stepping forward in time.  
+        # Don't worry too much about this!  
         self.initialise_decoding()
         t = 1
 

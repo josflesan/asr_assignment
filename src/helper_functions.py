@@ -19,6 +19,30 @@ def parse_lexicon(lex_file):
             lex[line[0]] = line[1:]  # first field the word, the rest is the phones
     return lex
 
+def parse_lexicon(lex_file, use_pronunciation=False):
+    """
+    Parse the lexicon file and return it in dictionary form.
+    
+    Args:
+        lex_file (str): filename of lexicon file with structure '<word> <phone1> <phone2>...'
+                        eg. peppers p eh p er z
+
+    Returns:
+        lex (dict): dictionary mapping words to list of phones
+    """
+    
+    lex = {}  # create a dictionary for the lexicon entries (this could be a problem with larger lexica)
+    with open(lex_file, 'r') as f:
+        for line in f:
+            line = line.split()  # split at each space
+            if use_pronunciation:
+                if line[0] not in lex:
+                    lex[line[0]] = list()
+                lex[line[0]].append(line[1:])  # first field the word, the rest is the phones
+            else:
+                lex[line[0]] = line[1:]
+    return lex
+
 def generate_symbol_tables(lexicon, n=3):
     '''
     Return word, phone and state symbol tables based on the supplied lexicon
