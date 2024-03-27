@@ -61,9 +61,9 @@ def split_data(split=0.5):
 
     return all_data[:int(len(all_data) * split)], all_data[int(len(all_data) * split):]
 
-def train(training_set, dev_set, self_loop=0.9, use_final=False, use_unigram=True, use_bigram=True, use_silence='linear-5', threshold=1e10, beam_size=1e10, log_file=None):
+def train(training_set, dev_set, self_loop=0.9, use_final=False, use_unigram=True, use_bigram=True, use_silence='linear-5', threshold=1e10, beam_size=1e10, use_tree=False, log_file=None):
     if log_file is None:
-        log_file = f"./logs/threshold={threshold}|beam_size={beam_size}.txt"
+        log_file = f"./baseline_tree_search/threshold={threshold}|beam_size={beam_size}.txt"
 
         if os.path.exists(log_file):
             print(f"SKIPPED {log_file}")
@@ -80,7 +80,10 @@ def train(training_set, dev_set, self_loop=0.9, use_final=False, use_unigram=Tru
 
     perplexity_bigrams = compute_bigram_probs(dev_set)
     
-    f = generate_sequence_wfst(string, self_loop_prob=self_loop, unigram_probs=unigram_probs, use_sil=use_silence, final_probs=final_probs, bigram_probs=bigram_probs)
+    if use_tree:
+        f = generate_tree_wfst(string, self_loop_prob=0.1)
+    else:
+        f = generate_sequence_wfst(string, self_loop_prob=self_loop, unigram_probs=unigram_probs, use_sil=use_silence, final_probs=final_probs, bigram_probs=bigram_probs)
 
     wav_files = 0
     total_errors, total_words = 0, 0
@@ -146,8 +149,8 @@ def train(training_set, dev_set, self_loop=0.9, use_final=False, use_unigram=Tru
 
 if __name__ == '__main__':
     # Grid search parameters
-    thresholds = list(range(100, 201, 20))[::-1]
-    beam_sizes = [i for i in range(120, 241, 24)][::-1]
+    thresholds = [i for i in range(100, 201, 20)][::-1]
+    beam_sizes = [i for i in range(40, 81, 20)][::-1]
 
     best_wer = 1e10
     best_pp = 1e10
@@ -162,7 +165,7 @@ if __name__ == '__main__':
 
     for threshold in thresholds:
         for beam_size in beam_sizes:
-            out_wer, out_perp = train(training_set, dev_set, threshold=threshold, beam_size=beam_size)
+            out_wer, out_perp = train(training_set, dev_set, threshold=threshold, beam_size=beam_size, use_tree=True)
 
             if out_wer < best_wer:
                 best_performing_wer = f"{threshold}|{beam_size}"
@@ -172,7 +175,7 @@ if __name__ == '__main__':
                 best_pp = out_perp
 
     # Write best performing
-    with open("./logs/best_performing.txt", "w") as f:
+    with open("./baseline_tree_search/best_performing.txt", "w") as f:
         f.write(f"Best Performing WER: {best_performing_wer}")
         f.write(f"Best Performing PP: {best_performing_pp}")
 

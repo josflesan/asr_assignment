@@ -34,6 +34,7 @@ def parse_args():
     parser.add_argument('--use-unigram', type=bool)
     parser.add_argument('--use-bigram', type=bool)
     parser.add_argument('--use-trigram', type=bool)
+    parser.add_argument('--use-tree', type=bool)
     parser.add_argument('--use-silence-state', type=bool)
     parser.add_argument('--silence-state-num', type=int)
     parser.add_argument('--pruning-threshold', type=float)
@@ -74,6 +75,8 @@ if __name__ == '__main__':
 
     perplexity_bigrams = compute_bigram_probs(dev_set)
 
+    plot_bigram_dist()
+
     # Create the lexicon
     string = "peter piper picked a peck of pickled peppers where's the peck of pickled peppers peter piper picked"
     lex = parse_lexicon('lexicon.txt')
@@ -81,6 +84,8 @@ if __name__ == '__main__':
 
     if args.use_trigram:
         f = generate_sequence_trigram_wfst(string, self_loop_prob=args.self_arc_prob, unigram_probs=unigram_probs, use_sil=args.use_silence_state, final_probs=final_probs, trigram_probs=trigram_probs)
+    if args.use_tree:
+        f = generate_tree_wfst(string, self_loop_prob=args.self_arc_prob)
     else:
         f = generate_sequence_wfst(string, self_loop_prob=args.self_arc_prob, unigram_probs=unigram_probs, use_sil=args.use_silence_state, final_probs=final_probs, bigram_probs=bigram_probs)
 
@@ -95,12 +100,16 @@ if __name__ == '__main__':
     deletion_errors = 0
     sub_errors = 0
     total_perplexity = 0
+    num_perp_skipped = 0
+    states_visited_dijk = [0, 0]
+
     for wav_file in test_set:
         wav_files += 1
 
         decoder = MyViterbiDecoder(f, wav_file, args.pruning_threshold, args.pruning_beam)
         
-        decode_time = timeit.timeit(lambda: decoder.decode(), number=1)
+        decode_time = timeit.timeit(lambda: decoder.decode(True, states_visited_dijk), number=1)
+        print(states_visited_dijk[0] / states_visited_dijk[1], states_visited_dijk)
         backtrace_time = timeit.timeit(lambda: decoder.backtrace(), number=1)
         decode_times.append(decode_time)
         backtrace_times.append(backtrace_time)
@@ -110,6 +119,10 @@ if __name__ == '__main__':
         error_counts = wer.compute_alignment_errors(transcription, words)
         word_count = len(transcription.split())
 
+        with open(f"decoded/transcription_{wav_files}.txt", "w") as file:
+            file.write(words + '\n')
+            file.write(transcription)
+
         total_errors += sum(error_counts)
         total_words += word_count
 
@@ -117,12 +130,17 @@ if __name__ == '__main__':
         deletion_errors += error_counts[1]
         insertion_errors += error_counts[2]
         
-        total_perplexity += compute_perplexity(words.split(), perplexity_bigrams)
+        current_perplexity = compute_perplexity(words.split(), perplexity_bigrams)
+        total_perplexity += current_perplexity
+
+        if current_perplexity == 0:
+            num_perp_skipped += 1
 
         print(wav_files, error_counts, word_count)
 
     print(f"Total WER: {total_errors / total_words}")
-    print(f"Avg. Perplexity: {total_perplexity / len(test_set)}")
+    print(f"Avg. Perplexity: {total_perplexity / (len(test_set) - num_perp_skipped)}")
+    print(f"Perplexity Skipped: {num_perp_skipped}")
     print(f"Average decode() Time: {sum(decode_times) / wav_files}")
     print(f"Average backtrace() Time: {sum(backtrace_times) / wav_files}")
     print(f"FST Number of States: {f.num_states()}")

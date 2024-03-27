@@ -116,7 +116,7 @@ class MyViterbiDecoder:
                             states_to_traverse.append(j)
 
 
-    def forward_dijkstra(self):
+    def forward_dijkstra(self, states_visited_dijk):
         states_visited = 0
         while not self.Q.empty():
             weight, (state, time_step) = self.Q.get()
@@ -126,7 +126,10 @@ class MyViterbiDecoder:
 
             if float(self.f.final(state)) != math.inf and time_step == self.om.observation_length():
                 self.finalWeights.add(weight)
-                print(f"States Visited: ", states_visited / (len(self.V) * len(self.V[0])))
+                states_visited_dijk[0] += states_visited
+                states_visited_dijk[1] += len(self.V) * len(self.V[0])
+
+                # print(f"States Visited: ", states_visited / (len(self.V) * len(self.V[0])))
                 return 
 
             if len(self.finalWeights) > 0 and min(self.finalWeights) - weight < -math.log(0.15):
@@ -264,12 +267,12 @@ class MyViterbiDecoder:
         return True
         
         
-    def decode(self, dijkstra=False):
+    def decode(self, dijkstra=False, states_visited_dijk=[]):
         self.initialise_decoding()
         t = 1
 
         if dijkstra:
-            self.forward_dijkstra()
+            self.forward_dijkstra(states_visited_dijk)
 
         else:
             self.traverse_epsilon_arcs(0)
